@@ -21,11 +21,15 @@ internal static partial class Program
     private const int PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY = 0x00020007;
     private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
     private const int JobObjectExtendedLimitInformation = 9;
+    private const int STARTF_USESTDHANDLES = 0x00000100;
+    private const uint HANDLE_FLAG_INHERIT = 0x00000001;
+    private const string MitigatedChildEnvironment = "SHARPEMU_MITIGATED_CHILD";
     private const ulong PROCESS_CREATION_MITIGATION_POLICY_CONTROL_FLOW_GUARD_ALWAYS_OFF = 0x00000002UL << 40;
     private const ulong PROCESS_CREATION_MITIGATION_POLICY2_CET_USER_SHADOW_STACKS_ALWAYS_OFF = 0x00000002UL << 28;
     private const ulong PROCESS_CREATION_MITIGATION_POLICY2_USER_CET_SET_CONTEXT_IP_VALIDATION_ALWAYS_OFF = 0x00000002UL << 32;
     private const ulong PROCESS_CREATION_MITIGATION_POLICY2_XTENDED_CONTROL_FLOW_GUARD_ALWAYS_OFF = 0x00000002UL << 40;
     private const int ATTACH_PARENT_PROCESS = -1;
+    private const int STD_INPUT_HANDLE = -10;
     private const int STD_OUTPUT_HANDLE = -11;
     private const int STD_ERROR_HANDLE = -12;
     private const uint GENERIC_READ = 0x80000000;
@@ -234,6 +238,10 @@ internal static partial class Program
     private static string[] NormalizeInternalArguments(string[] args, out bool isMitigatedChild)
     {
         isMitigatedChild = false;
+        var trustedMitigatedChild = string.Equals(
+            Environment.GetEnvironmentVariable(MitigatedChildEnvironment),
+            "1",
+            StringComparison.Ordinal);
         if (args.Length == 0)
         {
             return args;
@@ -244,7 +252,7 @@ internal static partial class Program
         {
             if (string.Equals(arg, MitigatedChildFlag, StringComparison.Ordinal))
             {
-                isMitigatedChild = true;
+                isMitigatedChild = trustedMitigatedChild;
                 continue;
             }
 
@@ -283,9 +291,11 @@ internal static partial class Program
         var commandLine = BuildCommandLine(processPath, childArgs);
         var startupInfoEx = new STARTUPINFOEX();
         startupInfoEx.StartupInfo.cb = Marshal.SizeOf<STARTUPINFOEX>();
+        ConfigureInheritedStdHandles(ref startupInfoEx.StartupInfo);
 
         nint attributeList = 0;
         nint mitigationPolicies = 0;
+        var previousChildEnvironment = Environment.GetEnvironmentVariable(MitigatedChildEnvironment);
         try
         {
             nuint attributeListSize = 0;
@@ -293,7 +303,9 @@ internal static partial class Program
             attributeList = Marshal.AllocHGlobal((nint)attributeListSize);
             if (!InitializeProcThreadAttributeList(attributeList, 1, 0, ref attributeListSize))
             {
-                return false;
+                childExitCode = 5;
+                Console.Error.WriteLine($"[ERROR] Failed to initialize mitigation attributes: {Marshal.GetLastWin32Error()}");
+                return true;
             }
 
             startupInfoEx.lpAttributeList = attributeList;
@@ -301,8 +313,7 @@ internal static partial class Program
             var policy1 = PROCESS_CREATION_MITIGATION_POLICY_CONTROL_FLOW_GUARD_ALWAYS_OFF;
             var policy2 =
                 PROCESS_CREATION_MITIGATION_POLICY2_CET_USER_SHADOW_STACKS_ALWAYS_OFF |
-                PROCESS_CREATION_MITIGATION_POLICY2_USER_CET_SET_CONTEXT_IP_VALIDATION_ALWAYS_OFF |
-                PROCESS_CREATION_MITIGATION_POLICY2_XTENDED_CONTROL_FLOW_GUARD_ALWAYS_OFF;
+                PROCESS_CREATION_MITIGATION_POLICY2_USER_CET_SET_CONTEXT_IP_VALIDATION_ALWAYS_OFF;
 
             mitigationPolicies = Marshal.AllocHGlobal(sizeof(ulong) * 2);
             Marshal.WriteInt64(mitigationPolicies, unchecked((long)policy1));
@@ -317,24 +328,31 @@ internal static partial class Program
                 0,
                 0))
             {
-                return false;
+                childExitCode = 5;
+                Console.Error.WriteLine($"[ERROR] Failed to apply mitigation attributes: {Marshal.GetLastWin32Error()}");
+                return true;
             }
 
             var cmdLineBuilder = new StringBuilder(commandLine);
             nint jobHandle = 0;
-            if (!CreateProcessW(
+            Environment.SetEnvironmentVariable(MitigatedChildEnvironment, "1");
+            var created = CreateProcessW(
                 processPath,
                 cmdLineBuilder,
                 0,
                 0,
-                false,
+                true,
                 EXTENDED_STARTUPINFO_PRESENT,
                 0,
                 Environment.CurrentDirectory,
                 ref startupInfoEx,
-                out var processInfo))
+                out var processInfo);
+            Environment.SetEnvironmentVariable(MitigatedChildEnvironment, previousChildEnvironment);
+            if (!created)
             {
-                return false;
+                childExitCode = 5;
+                Console.Error.WriteLine($"[ERROR] Failed to launch mitigated child process: {Marshal.GetLastWin32Error()}");
+                return true;
             }
 
             try
@@ -388,6 +406,8 @@ internal static partial class Program
         }
         finally
         {
+            Environment.SetEnvironmentVariable(MitigatedChildEnvironment, previousChildEnvironment);
+
             if (attributeList != 0)
             {
                 DeleteProcThreadAttributeList(attributeList);
@@ -399,6 +419,42 @@ internal static partial class Program
                 Marshal.FreeHGlobal(mitigationPolicies);
             }
         }
+    }
+
+    private static void ConfigureInheritedStdHandles(ref STARTUPINFO startupInfo)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var input = GetStdHandle(STD_INPUT_HANDLE);
+        var output = GetStdHandle(STD_OUTPUT_HANDLE);
+        var error = GetStdHandle(STD_ERROR_HANDLE);
+        if (!IsHandleValid(output) && !IsHandleValid(error))
+        {
+            return;
+        }
+
+        if (IsHandleValid(input))
+        {
+            _ = SetHandleInformation(input, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+            startupInfo.hStdInput = input;
+        }
+
+        if (IsHandleValid(output))
+        {
+            _ = SetHandleInformation(output, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+            startupInfo.hStdOutput = output;
+        }
+
+        if (IsHandleValid(error))
+        {
+            _ = SetHandleInformation(error, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+            startupInfo.hStdError = error;
+        }
+
+        startupInfo.dwFlags |= STARTF_USESTDHANDLES;
     }
 
     private static string BuildCommandLine(string processPath, IReadOnlyList<string> args)
@@ -818,6 +874,10 @@ internal static partial class Program
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetStdHandle(int stdHandle, nint handle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetHandleInformation(nint handle, uint mask, uint flags);
 
     [DllImport("kernel32.dll", EntryPoint = "CreateFileW", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern nint CreateFileW(
