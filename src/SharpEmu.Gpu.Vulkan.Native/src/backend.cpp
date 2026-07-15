@@ -1,5 +1,6 @@
 /* Copyright (C) 2026 SharpEmu Emulator Project
  * SPDX-License-Identifier: GPL-2.0-or-later */
+#define SDL_MAIN_HANDLED 1
 #include "sharpemu_gpu_vulkan.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -764,7 +765,7 @@ se_gpu_result SE_GPU_CALL se_gpu_input_snapshot(se_gpu_backend* b, se_gpu_input*
     if (state->left_trigger > 64) state->gamepad_buttons |= 1u << 10;
     if (state->right_trigger > 64) state->gamepad_buttons |= 1u << 11;
     const char* name = SDL_GetGamepadName(b->gamepad);
-    if (name) std::strncpy(state->gamepad_name_utf8, name, sizeof(state->gamepad_name_utf8) - 1);
+    if (name) SDL_strlcpy(state->gamepad_name_utf8, name, sizeof(state->gamepad_name_utf8));
     return SE_GPU_OK;
 }
 se_gpu_result SE_GPU_CALL se_gpu_present_bgra(
