@@ -199,9 +199,13 @@ jobs:
             autoconf \
             autoconf-archive \
             automake \
+            libegl1-mesa-dev \
+            libibus-1.0-dev \
             libtool \
             libltdl-dev \
             libvulkan-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
             pkg-config
           "$VCPKG_INSTALLATION_ROOT/vcpkg" install sdl3:x64-linux
           cmake \
