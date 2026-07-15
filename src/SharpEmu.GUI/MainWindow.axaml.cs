@@ -116,6 +116,8 @@ public partial class MainWindow : Window
         // The settings page edits _settings live, so a launch started while
         // it is open already uses the new values.
         LogLevelBox.SelectionChanged += (_, _) => _settings.LogLevel = SelectedLogLevel();
+        RenderingBackendBox.SelectionChanged += (_, _) =>
+            _settings.RenderingBackend = SelectedRenderingBackend();
         TraceImportsBox.ValueChanged += (_, _) => _settings.ImportTraceLimit = (int)(TraceImportsBox.Value ?? 0);
         StrictToggle.IsCheckedChanged += (_, _) => _settings.StrictDynlibResolution = StrictToggle.IsChecked == true;
         LogToFileToggle.IsCheckedChanged += (_, _) => _settings.LogToFile = LogToFileToggle.IsChecked == true;
@@ -439,6 +441,11 @@ public partial class MainWindow : Window
         CpuEngineDesc.Text = loc.Get("Options.CpuEngine.Desc");
         CpuEngineNativeItem.Content = loc.Get("Options.CpuEngine.Native");
 
+        RenderingBackendLabel.Text = loc.Get("Options.RenderingBackend.Label");
+        RenderingBackendDesc.Text = loc.Get("Options.RenderingBackend.Desc");
+        RenderingBackendNativeItem.Content = loc.Get("Options.RenderingBackend.Native");
+        RenderingBackendLegacyItem.Content = loc.Get("Options.RenderingBackend.Legacy");
+
         StrictLabel.Text = loc.Get("Options.Strict.Label");
         StrictDesc.Text = loc.Get("Options.Strict.Desc");
 
@@ -596,6 +603,10 @@ public partial class MainWindow : Window
 
     private void ApplySettingsToControls()
     {
+        RenderingBackendBox.SelectedIndex = string.Equals(
+            _settings.RenderingBackend,
+            "Native",
+            StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         LogLevelBox.SelectedIndex = _settings.LogLevel.ToLowerInvariant() switch
         {
             "trace" => 0,
@@ -653,6 +664,9 @@ public partial class MainWindow : Window
             _ => "Info",
         };
     }
+
+    private string SelectedRenderingBackend() =>
+        RenderingBackendBox.SelectedIndex == 1 ? "Native" : "Legacy";
 
     private void UpdateLogFilePathText()
     {
@@ -1472,6 +1486,15 @@ public partial class MainWindow : Window
             Environment.SetEnvironmentVariable(name, "1");
             _appliedEnvironmentVariables.Add(name);
         }
+
+        // The GUI owns this setting when it launches the emulator. Set both
+        // choices explicitly so a SHARPEMU_GPU_BACKEND value inherited by the
+        // launcher cannot silently override the Options menu.
+        Environment.SetEnvironmentVariable(
+            "SHARPEMU_GPU_BACKEND",
+            string.Equals(_settings.RenderingBackend, "Legacy", StringComparison.OrdinalIgnoreCase)
+                ? "legacy"
+                : "native");
 
         var emulator = new EmulatorProcess();
         emulator.OutputReceived += (line, isError) => _pendingLines.Enqueue((line, isError));

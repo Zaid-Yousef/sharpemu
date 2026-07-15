@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using SharpEmu.Libs.Gpu.Vulkan;
+using SharpEmu.Libs.Gpu.NativeVulkan;
 
 namespace SharpEmu.Libs.Gpu;
 
@@ -12,7 +13,13 @@ namespace SharpEmu.Libs.Gpu;
 /// </summary>
 internal static class GuestGpu
 {
-    private static readonly Lazy<IGuestGpuBackend> Instance = new(static () => new VulkanGuestGpuBackend());
+    private static readonly Lazy<IGuestGpuBackend> Instance = new(static () =>
+        string.Equals(
+            Environment.GetEnvironmentVariable("SHARPEMU_GPU_BACKEND"),
+            "native",
+            StringComparison.OrdinalIgnoreCase)
+            ? new NativeVulkanGuestGpuBackend()
+            : new VulkanGuestGpuBackend());
 
     public static IGuestGpuBackend Current => Instance.Value;
 }

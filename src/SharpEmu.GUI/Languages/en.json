@@ -43,6 +43,11 @@
   "Options.CpuEngine.Desc": "Execution engine used to run game code.",
   "Options.CpuEngine.Native": "Native",
 
+  "Options.RenderingBackend.Label": "Rendering backend",
+  "Options.RenderingBackend.Desc": "Graphics implementation used for newly launched games.",
+  "Options.RenderingBackend.Native": "Native Vulkan",
+  "Options.RenderingBackend.Legacy": "Silk.NET Vulkan (Legacy)",
+
   "Options.Strict.Label": "Strict dynlib resolution",
   "Options.Strict.Desc": "Fail the launch when an imported symbol cannot be resolved.",
 

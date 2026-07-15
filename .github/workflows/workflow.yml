@@ -96,6 +96,19 @@ jobs:
             Directory.Packages.props
             Directory.Build.props
 
+      - name: Install Windows native GPU dependencies
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install sdl3:x64-windows vulkan:x64-windows
+
+          cmake `
+            -S src/SharpEmu.Gpu.Vulkan.Native `
+            -B artifacts/native/gpu-vulkan `
+            -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DBUILD_TESTING=OFF
+
       - name: Restore solution
         run: dotnet restore SharpEmu.slnx
 
@@ -113,6 +126,19 @@ jobs:
 
       - name: Publish win-x64 CLI
         run: dotnet publish src/SharpEmu.CLI/SharpEmu.CLI.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishDir="${env:PUBLISH_DIR}"
+
+      - name: Verify Windows native GPU runtime
+        shell: pwsh
+        run: |
+          $required = @(
+            (Join-Path $env:PUBLISH_DIR 'sharpemu_gpu_vulkan.dll'),
+            (Join-Path $env:PUBLISH_DIR 'SDL3.dll')
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "Missing native GPU runtime: $path"
+            }
+          }
 
       - name: Create release archive
         run: |

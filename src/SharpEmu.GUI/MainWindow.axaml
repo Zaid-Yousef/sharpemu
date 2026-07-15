@@ -205,6 +205,19 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
                       <Grid ColumnDefinitions="*,Auto">
                         <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
+                          <TextBlock x:Name="RenderingBackendLabel" Text="Rendering backend" FontSize="13" />
+                          <TextBlock x:Name="RenderingBackendDesc" Text="Graphics implementation used for newly launched games."
+                                     FontSize="11" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" x:Name="RenderingBackendBox" Width="200" SelectedIndex="0"
+                                  VerticalAlignment="Center" CornerRadius="8">
+                          <ComboBoxItem x:Name="RenderingBackendLegacyItem" Content="Silk.NET Vulkan (Legacy)" />
+                          <ComboBoxItem x:Name="RenderingBackendNativeItem" Content="Native Vulkan" />
+                        </ComboBox>
+                      </Grid>
+
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,16,0">
                           <TextBlock x:Name="StrictLabel" Text="Strict dynlib resolution" FontSize="13" />
                           <TextBlock x:Name="StrictDesc" Text="Fail the launch when an imported symbol cannot be resolved."
                                      FontSize="11" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />

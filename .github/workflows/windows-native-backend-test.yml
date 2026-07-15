@@ -1,0 +1,93 @@
+# Copyright (C) 2026 SharpEmu Emulator Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+name: Test Windows Native Vulkan Backend
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-windows-native-vulkan:
+    name: Build and test win-x64 native backend
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: true
+      NUGET_PACKAGES: ${{ github.workspace }}\.nuget\packages
+      NATIVE_BUILD_DIR: ${{ github.workspace }}\artifacts\native\gpu-vulkan
+      PUBLISH_DIR: ${{ github.workspace }}\artifacts\publish\win-x64-native-test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.103
+          cache: true
+          cache-dependency-path: |
+            Directory.Packages.props
+            src/**/packages.lock.json
+
+      - name: Install native dependencies
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install sdl3:x64-windows vulkan:x64-windows
+
+      - name: Configure native backend
+        shell: pwsh
+        run: |
+          cmake `
+            -S src/SharpEmu.Gpu.Vulkan.Native `
+            -B "$env:NATIVE_BUILD_DIR" `
+            -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DBUILD_TESTING=ON
+
+      - name: Build native backend and Windows-safe ABI test
+        run: cmake --build "$env:NATIVE_BUILD_DIR" --config Release --target sharpemu_gpu_vulkan_exports_test
+
+      - name: Run native DLL load and ABI test
+        run: ctest --test-dir "$env:NATIVE_BUILD_DIR" -C Release -R sharpemu_gpu_vulkan_exports_test --output-on-failure
+
+      - name: Restore solution
+        run: dotnet restore SharpEmu.slnx --locked-mode
+
+      - name: Build solution
+        run: dotnet build SharpEmu.slnx -c Release --no-restore
+
+      - name: Publish win-x64 emulator
+        run: dotnet publish src/SharpEmu.CLI/SharpEmu.CLI.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishDir="${env:PUBLISH_DIR}"
+
+      - name: Verify published native runtime
+        shell: pwsh
+        run: |
+          $required = @(
+            (Join-Path $env:PUBLISH_DIR 'SharpEmu.exe'),
+            (Join-Path $env:PUBLISH_DIR 'sharpemu_gpu_vulkan.dll'),
+            (Join-Path $env:PUBLISH_DIR 'SDL3.dll')
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "Missing published runtime file: $path"
+            }
+          }
+
+          $exports = & dumpbin.exe /nologo /exports (Join-Path $env:PUBLISH_DIR 'sharpemu_gpu_vulkan.dll')
+          foreach ($name in @('se_gpu_abi_version', 'se_gpu_create', 'se_gpu_submit_draw', 'se_gpu_present_bgra')) {
+            if ($exports -notmatch "\b$name\b") {
+              throw "Missing native GPU export: $name"
+            }
+          }
+
+      - name: Upload tested Windows package
+        uses: actions/upload-artifact@v7
+        with:
+          name: sharpemu-win-x64-native-backend-test-${{ github.sha }}
+          path: ${{ env.PUBLISH_DIR }}
+          if-no-files-found: error
+          retention-days: 7
