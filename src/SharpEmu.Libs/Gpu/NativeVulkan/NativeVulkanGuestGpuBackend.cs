@@ -34,7 +34,16 @@ internal sealed unsafe class NativeVulkanGuestGpuBackend : IGuestGpuBackend
             }
         }
         _ready.Wait();
-        if (_startError is not null) throw new InvalidOperationException("Native Vulkan startup failed", _startError);
+        if (_startError is not null)
+        {
+            if (_startError is DllNotFoundException)
+            {
+                _ = NativeVulkanApi.IsAvailable(out var error);
+                throw new InvalidOperationException(error, _startError);
+            }
+
+            throw new InvalidOperationException("Native Vulkan startup failed", _startError);
+        }
     }
 
     public bool TryCompileVertexShader(Gen5ShaderState state, Gen5ShaderEvaluation evaluation,

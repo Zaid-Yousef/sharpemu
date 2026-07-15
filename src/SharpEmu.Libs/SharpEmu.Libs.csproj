@@ -37,46 +37,5 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
   <PropertyGroup>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <NativeGpuProjectDir>$(MSBuildThisFileDirectory)..\SharpEmu.Gpu.Vulkan.Native</NativeGpuProjectDir>
-    <NativeGpuBuildDir>$(RepoRoot)artifacts\native\gpu-vulkan</NativeGpuBuildDir>
   </PropertyGroup>
-
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-    <NativeGpuLibrary>$(NativeGpuBuildDir)\bin\sharpemu_gpu_vulkan.dll</NativeGpuLibrary>
-    <NativeGpuFileName>sharpemu_gpu_vulkan.dll</NativeGpuFileName>
-    <NativeGpuSdlLibrary>$(NativeGpuBuildDir)\bin\SDL3.dll</NativeGpuSdlLibrary>
-  </PropertyGroup>
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
-    <NativeGpuLibrary>$(NativeGpuBuildDir)\bin\libsharpemu_gpu_vulkan.so</NativeGpuLibrary>
-    <NativeGpuFileName>libsharpemu_gpu_vulkan.so</NativeGpuFileName>
-  </PropertyGroup>
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
-    <NativeGpuLibrary>$(NativeGpuBuildDir)\bin\libsharpemu_gpu_vulkan.dylib</NativeGpuLibrary>
-    <NativeGpuFileName>libsharpemu_gpu_vulkan.dylib</NativeGpuFileName>
-  </PropertyGroup>
-
-  <ItemGroup Condition="'$(NativeGpuLibrary)' != ''">
-    <None Include="$(NativeGpuLibrary)"
-          Link="$(NativeGpuFileName)"
-          CopyToOutputDirectory="PreserveNewest"
-          CopyToPublishDirectory="PreserveNewest" />
-    <None Include="$(NativeGpuSdlLibrary)"
-          Condition="'$(NativeGpuSdlLibrary)' != ''"
-          Link="SDL3.dll"
-          CopyToOutputDirectory="PreserveNewest"
-          CopyToPublishDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <!-- Native outputs must exist before MSBuild evaluates/copies Content items.
-       Hooking Build is too late on a clean checkout: CopyFilesToOutputDirectory
-       runs first and fails because the library has not been produced yet. -->
-  <Target Name="BuildNativeGuestGpu" BeforeTargets="PrepareForBuild" Condition="'$(NativeGpuLibrary)' != ''">
-    <Exec Command="cmake -S &quot;$(NativeGpuProjectDir)&quot; -B &quot;$(NativeGpuBuildDir)&quot; -DCMAKE_BUILD_TYPE=$(Configuration) -DBUILD_TESTING=OFF" />
-    <Exec Command="cmake --build &quot;$(NativeGpuBuildDir)&quot; --config $(Configuration)" />
-    <Copy SourceFiles="$(NativeGpuLibrary)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(NativeGpuSdlLibrary)"
-          DestinationFolder="$(TargetDir)"
-          SkipUnchangedFiles="true"
-          Condition="'$(NativeGpuSdlLibrary)' != ''" />
-  </Target>
 </Project>

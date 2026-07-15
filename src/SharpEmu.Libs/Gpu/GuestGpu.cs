@@ -13,13 +13,25 @@ namespace SharpEmu.Libs.Gpu;
 /// </summary>
 internal static class GuestGpu
 {
-    private static readonly Lazy<IGuestGpuBackend> Instance = new(static () =>
-        string.Equals(
-            Environment.GetEnvironmentVariable("SHARPEMU_GPU_BACKEND"),
-            "native",
-            StringComparison.OrdinalIgnoreCase)
-            ? new NativeVulkanGuestGpuBackend()
-            : new VulkanGuestGpuBackend());
+    private static readonly Lazy<IGuestGpuBackend> Instance = new(CreateBackend);
 
     public static IGuestGpuBackend Current => Instance.Value;
+
+    private static IGuestGpuBackend CreateBackend()
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("SHARPEMU_GPU_BACKEND"),
+                "native",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return new VulkanGuestGpuBackend();
+        }
+
+        if (!NativeVulkanApi.IsAvailable(out var error))
+        {
+            Console.Error.WriteLine($"[LOADER][WARN] {error}");
+        }
+
+        return new NativeVulkanGuestGpuBackend();
+    }
 }

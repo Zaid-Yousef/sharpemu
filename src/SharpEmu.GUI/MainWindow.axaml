@@ -211,8 +211,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
                         </StackPanel>
                         <ComboBox Grid.Column="1" x:Name="RenderingBackendBox" Width="200" SelectedIndex="0"
                                   VerticalAlignment="Center" CornerRadius="8">
-                          <ComboBoxItem x:Name="RenderingBackendLegacyItem" Content="Silk.NET Vulkan (Legacy)" />
-                          <ComboBoxItem x:Name="RenderingBackendNativeItem" Content="Native Vulkan" />
+                          <ComboBoxItem x:Name="RenderingBackendLegacyItem" Content="Silk.NET Vulkan (Default)" />
+                          <ComboBoxItem x:Name="RenderingBackendNativeItem" Content="Native Vulkan (Experimental)" />
                         </ComboBox>
                       </Grid>
 

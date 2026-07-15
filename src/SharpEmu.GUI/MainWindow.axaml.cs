@@ -1496,6 +1496,22 @@ public partial class MainWindow : Window
                 ? "legacy"
                 : "native");
 
+        if (string.Equals(_settings.RenderingBackend, "Native", StringComparison.OrdinalIgnoreCase))
+        {
+            var nativeLibraryName = OperatingSystem.IsWindows()
+                ? "sharpemu_gpu_vulkan.dll"
+                : OperatingSystem.IsMacOS()
+                    ? "libsharpemu_gpu_vulkan.dylib"
+                    : "libsharpemu_gpu_vulkan.so";
+            var emulatorDirectory = Path.GetDirectoryName(_emulatorExePath) ?? AppContext.BaseDirectory;
+            if (!File.Exists(Path.Combine(emulatorDirectory, nativeLibraryName)))
+            {
+                AppendConsoleLine(
+                    Localization.Instance.Format("Launch.NativeBackendMissing", nativeLibraryName),
+                    WarningLineBrush);
+            }
+        }
+
         var emulator = new EmulatorProcess();
         emulator.OutputReceived += (line, isError) => _pendingLines.Enqueue((line, isError));
         emulator.Exited += code => Dispatcher.UIThread.Post(() => OnEmulatorExited(code));

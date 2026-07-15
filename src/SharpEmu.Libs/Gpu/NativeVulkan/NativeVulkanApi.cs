@@ -24,6 +24,31 @@ internal static unsafe partial class NativeVulkanApi
     internal const uint AbiVersion = 1;
     private const string Library = "sharpemu_gpu_vulkan";
 
+    internal static string LibraryFileName =>
+        OperatingSystem.IsWindows() ? "sharpemu_gpu_vulkan.dll" :
+        OperatingSystem.IsMacOS() ? "libsharpemu_gpu_vulkan.dylib" :
+        "libsharpemu_gpu_vulkan.so";
+
+    internal static bool IsAvailable(out string error)
+    {
+        if (NativeLibrary.TryLoad(
+                Library,
+                typeof(NativeVulkanApi).Assembly,
+                DllImportSearchPath.SafeDirectories | DllImportSearchPath.AssemblyDirectory,
+                out var handle))
+        {
+            NativeLibrary.Free(handle);
+            error = string.Empty;
+            return true;
+        }
+
+        error =
+            $"The optional native Vulkan backend was selected, but {LibraryFileName} could not be loaded. " +
+            "Place the library from https://github.com/sharpemu/sharpemu.vulkan next to the SharpEmu executable " +
+            "and ensure its SDL3 and Vulkan runtime dependencies are installed.";
+        return false;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct CreateInfo
     {
